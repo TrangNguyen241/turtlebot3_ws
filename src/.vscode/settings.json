@@ -1,0 +1,32 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/nguyehtt/turtlebot3_ws/install/turtlebot3_teleop/lib/python3.10/site-packages",
+        "/home/nguyehtt/turtlebot3_ws/install/turtlebot3_example/lib/python3.10/site-packages",
+        "/home/nguyehtt/turtlebot3_ws/install/turtlebot3_msgs/local/lib/python3.10/dist-packages",
+        "/home/nguyehtt/turtlebot3_ws/install/dynamixel_sdk_custom_interfaces/local/lib/python3.10/dist-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2_simulation/lib/python3.10/site-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2_simple_mapper/lib/python3.10/site-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2_scan/lib/python3.10/site-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2_interfaces/local/lib/python3.10/dist-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2/lib/python3.10/site-packages",
+        "/home/nguyehtt/ros2_ws/install/my_py_pkg/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/nguyehtt/turtlebot3_ws/install/turtlebot3_teleop/lib/python3.10/site-packages",
+        "/home/nguyehtt/turtlebot3_ws/install/turtlebot3_example/lib/python3.10/site-packages",
+        "/home/nguyehtt/turtlebot3_ws/install/turtlebot3_msgs/local/lib/python3.10/dist-packages",
+        "/home/nguyehtt/turtlebot3_ws/install/dynamixel_sdk_custom_interfaces/local/lib/python3.10/dist-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2_simulation/lib/python3.10/site-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2_simple_mapper/lib/python3.10/site-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2_scan/lib/python3.10/site-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2_interfaces/local/lib/python3.10/dist-packages",
+        "/home/nguyehtt/crazyflies_ws/install/crazyflie_ros2/lib/python3.10/site-packages",
+        "/home/nguyehtt/ros2_ws/install/my_py_pkg/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "ros.distro": "humble",
+    "cmake.sourceDirectory": "/home/nguyehtt/turtlebot3_ws/src/turtlebot3/turtlebot3_navigation2"
+}
