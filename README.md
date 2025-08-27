@@ -2,7 +2,7 @@
 
 **Author:** Huynh Thao Trang NGUYEN | LCIS (Valence, FR), March 2025  
 
-This project implements and evaluates several control strategies for **target tracking** and **trajectory tracking** with Turtlebot3 in simulation (ROS2 + Gazebo) and in real experiments (Qualisys camera system). It also includes **obstacle avoidance** controllers using **CLF-CBF** and **ERG**.
+This project implements and evaluates several control strategies for **target tracking** and **trajectory tracking** with Turtlebot3 in simulation (ROS2 + Gazebo) and in real experiments (Qualisys camera system). It also includes **obstacle avoidance** controllers using **CLF-CBF** and **CLF-ERG**.
 
 ---
 
@@ -16,12 +16,12 @@ This project implements and evaluates several control strategies for **target tr
 ## Objectives
 - Design and evaluate different controllers for target and trajectory tracking:
   - Saturated control  
-  - LQR + Lyapunov control  
+  - CLF-based control  
   - Implicit MPC  
   - Explicit MPC  
 - Implement obstacle avoidance with:
-  - CLF-CBF (Control Lyapunov & Control Barrier Functions)
-  - ERG (Explicit Reference Governor)
+  - CLF-CBF (Control Lyapunov Function & Control Barrier Functions)
+  - CLF-ERG (Control Lyapunov Function & Explicit Reference Governor)
 
 ---
 
@@ -53,7 +53,7 @@ ros2 run target_tracking target_tracking_controllers --ros-args -p controller_ty
 
 **Available controllers:**
 - `saturated` → Saturated Control  
-- `lqr_lyapunov` → LQR + Lyapunov Control  
+- `lqr_lyapunov` → CLF-based Control  
 - `explicit_mpc` → Explicit MPC  
 - `implicit_mpc` → Implicit MPC  
 
@@ -69,7 +69,7 @@ rviz2
 
 ---
 
-# Trajectory Tracking (Run ready-made scripts)
+# Trajectory Tracking 
 
 After launching Gazebo (Step 1), you can run trajectory tracking examples for Turtlebot3 using each controller’s script.
 
@@ -81,7 +81,7 @@ ros2 run saturated_control saturated_traj
 ```
 Runs `saturated_traj.py` in `turtlebot3_ws/src/saturated_control/saturated_control`.
 
-### LQR + Lyapunov Control
+### CLF-based Control
 ```bash
 ros2 run lya_lqr_control lya_lqr_traj
 ```
@@ -101,7 +101,7 @@ Runs `imp_mpc_traj.py` in `turtlebot3_ws/src/imp_mpc/imp_mpc`.
 
 ---
 
-## Obstacle Avoidance (CLF-CBF and ERG)
+## Obstacle Avoidance (CLF-CBF and CLF-ERG)
 
 ### Step 1: Launch Gazebo environment with Turtlebot3 and obstacles
 ```bash
@@ -114,13 +114,11 @@ ros2 run cbf_avoid_colli cbf_avoid_colli
 ```
 Runs `cbf_avoid_colli.py` in `turtlebot3_ws/src/cbf_avoid_colli/cbf_avoid_colli`.
 
-### Step 2B: Reach a target while avoiding obstacles with **ERG**
+### Step 2B: Reach a target while avoiding obstacles with **CLF-ERG**
 ```bash
 ros2 run obs_avoid ref_gov_target
 ```
 Runs `ref_gov_target.py` in `turtlebot3_ws/src/obs_avoid/obs_avoid`.
-
-> Tip: You can visualize the robot and target in RViz as in the Target Tracking section.
 
 ---
 
