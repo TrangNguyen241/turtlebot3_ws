@@ -45,7 +45,7 @@ import sys
 sys.path.append('/home/nguyehtt/turtlebot3_ws/src/target_tracking')
 from utilities.exmpc_solution import *
 from utilities.controllers_params import (
-    saturated_params, lqr_lyapunov_params, implicit_mpc_params
+    saturated_params, lqr_lyapunov_params, sat_lyapunov_params, implicit_mpc_params, nonlinear_mpc_params
 )
 
 class TargetControl(Node):
@@ -68,7 +68,7 @@ class TargetControl(Node):
         # self.Ts = 0.05 # sampling time
         self.b = 0.1 # the control point in front of robot #0.1
         self.A = np.zeros((2,2)) # matrix A in continuous time
-        self.B = np.eye(2) # matrix B in continuos time
+        self.B = np.eye(2) # matrix B in continuous time
         self.Ad = np.eye(2) + self.A * self.Ts # matrix A in discrete time
         self.Bd = self.B * self.Ts # matrix B in discrete time
         self.nx = self.A.shape[1]
@@ -138,9 +138,9 @@ class TargetControl(Node):
         #   Subscriptions / Publishers         #
         ########################################
         # Subscribe to /odom topic in simulation
-        # self.supscription = self.create_subscription(Odometry,'odom',self.odometry_callback, qos_profile=qos_profile_sensor_data)
+        self.supscription = self.create_subscription(Odometry,'odom',self.odometry_callback, qos_profile=qos_profile_sensor_data)
         # Subscribe to /rigid_bodies topic in experiment
-        self.subscription = self.create_subscription(RigidBodies, 'rigid_bodies', self.rigid_bodies_callback, 10)
+        # self.subscription = self.create_subscription(RigidBodies, 'rigid_bodies', self.rigid_bodies_callback, 10)
         self.publisher = self.create_publisher(Twist,'cmd_vel', 10)
         self.timer = self.create_timer(self.Ts, self.control_callback)
         # Publishers for reference path and actual path for visualization in Rviz
@@ -167,6 +167,9 @@ class TargetControl(Node):
             # Linearized states of robot
             pose_robot = np.array([[x + self.b * np.cos(theta)], 
                                 [y + self.b * np.sin(theta)]]) 
+            real_pose = np.array([[x],
+                                  [y],
+                                  [theta]])
             # Publish actual path in Rviz for visualization
             self.publish_actual_path(pose_robot[0,0], pose_robot[1,0])
             # Get parameters: controller type and target
@@ -184,15 +187,25 @@ class TargetControl(Node):
                 # Start time 
                 tic = time.time()
                 # Using chosen control method to compute u in integrator dynamics
-                linear_input_u = self.get_control(controller_type, pose_robot, target)
+                if controller_type == 'nonlinear_mpc':
+                    linear_input_u = self.get_control(controller_type, real_pose, target)
+                else:
+                    linear_input_u = self.get_control(controller_type, pose_robot, target)
                 # End time 
                 toc = time.time()
-                # Transform u to control input (v and omega) in unicycle dynamics
-                self.u_real = np.array([[np.cos(theta), np.sin(theta)],
-                                [-np.sin(theta)/self.b, np.cos(theta)/self.b]]) @ linear_input_u
+                if controller_type == 'nonlinear_mpc':
+                    # nonlinear mpc => output : v and omega (real input)
+                    self.u_real = linear_input_u
+                else:
+                    # Transform u to control input (v and omega) in unicycle dynamics
+                    self.u_real = np.array([[np.cos(theta), np.sin(theta)],
+                                    [-np.sin(theta)/self.b, np.cos(theta)/self.b]]) @ linear_input_u
                 # Processing linear velocity fo turtlebot
                 self.u_real_safe[0,0] = np.min([self.u_real[0,0], (2.6 - self.u_real[1,0])/2.6 * 0.21])
                 self.u_real_safe[1,0] = self.u_real[1,0]
+                # Not processing
+                # self.u_real_safe[0,0] = self.u_real[0,0]
+                # self.u_real_safe[1,0] = self.u_real[1,0]
                 # Publish command for robots
                 cmd_msg = Twist()
                 cmd_msg.linear.x = self.u_real_safe[0, 0] # linear velocity
@@ -207,6 +220,9 @@ class TargetControl(Node):
                 self.num_tracking_steps +=1 # count number of tracking steps
                 time_series = self.num_tracking_steps * self.Ts
                 self.save_data_plot(time=time_series, state=pose_robot, target=target, linear_u=linear_input_u, u_real=self.u_real)
+                self.save_data_export(controller_type, self.x_plot, self.y_plot, self.time_plot, self.lin_v_plot, self.ang_v_plot)
+                print(f"Data saved for {controller_type} controller.")
+                print(f"Average computation time of controller: {self.avg_comp_time}")
             else:
                 self.target_tracking_finish = True  
                 # Stop robot by setting linear and angular velocity to 0.0
@@ -233,8 +249,10 @@ class TargetControl(Node):
         controllers = {
             'saturated': self.saturated_control,
             'lqr_lyapunov': self.lqr_lyapunov_control,
+            'sat_lyapunov':self.sat_lyapunov_control,
             'explicit_mpc': self.explicit_mpc,
-            'implicit_mpc': self.implicit_mpc
+            'implicit_mpc': self.implicit_mpc,
+            'nonlinear_mpc': self.nonlinear_mpc
         }
 
         if controller_type in controllers:
@@ -308,6 +326,48 @@ class TargetControl(Node):
         return u_lqr_lya
     
     #********************************
+    #       SAT+LYAPUNOV CONTROL    *    
+    #********************************
+    def sat_lyapunov_control(self, state, target):
+
+        '''----------- Get parameters ------------'''
+        alpha = sat_lyapunov_params["alpha"]
+
+        '''------- Compute the saturated control input --------'''
+        # Computing the control signal
+        u_nom_sat = self.saturated_control(state, target)
+
+        '''------- Compute the SAT + Lyapunov control input --------'''
+        #+++ Lyapunouv based control +++
+        # Define solver Casadi
+        solver = cas.Opti()
+        options = {"ipopt.print_level": 0, "print_time": 0, "ipopt.sb": "yes", "ipopt.max_iter": 3000} # max_iter: 5000
+        solver.solver('ipopt', options)
+        # Define variables
+        u_lya = solver.variable(self.nu, 1)
+        # Define parameters
+        u_sat = solver.parameter(self.nu, 1)
+        x_state = solver.parameter(self.nx, 1)
+        # Define objective
+        objective = cas.mtimes(cas.transpose(u_sat - u_lya), (u_sat - u_lya))
+        # Define constraints
+        solver.subject_to(cas.mtimes(cas.mtimes(2*cas.transpose(x_state), self.P_lya), u_lya) <= -alpha*cas.mtimes(cas.mtimes(cas.transpose(x_state), self.P_lya), x_state))
+        solver.subject_to(cas.mtimes(self.U_input.A, u_lya) <= self.U_input.b)
+        # Minimize objective
+        solver.minimize(objective)
+        # Set value for parameters
+        solver.set_value(u_sat, u_nom_sat)
+        error = state - target
+        solver.set_value(x_state, error)
+        # Solve u 
+        sol = solver.solve()
+        u_sat_lya = sol.value(u_sat)
+        # Reshape u
+        u_sat_lya = u_sat_lya.reshape(2,1)
+        return u_sat_lya
+
+
+    #********************************
     #          ExMPC CONTROL        *    
     #********************************
     def explicit_mpc(self, state, target):
@@ -327,6 +387,11 @@ class TargetControl(Node):
         R_mpc = implicit_mpc_params["R"]
         P_mpc = implicit_mpc_params["P"]
         Npred = implicit_mpc_params["Npred"]
+
+        # Q_mpc = nonlinear_mpc_params["Q"]
+        # R_mpc = nonlinear_mpc_params["R"]
+        # P_mpc = nonlinear_mpc_params["P"]
+        # Npred = nonlinear_mpc_params["Npred"]
 
         '''------- Compute the implicit MPC control input --------'''
         # Optimization problem using casadi
@@ -364,6 +429,69 @@ class TargetControl(Node):
         solver_2.set_value(xinit, state)
         sol = solver_2.solve()
         usol = sol.value(u)
+        u_impc = usol[:,0].reshape(2,1)
+        return u_impc
+    
+    #*****************************************
+    #          Nonlinear MPC CONTROL         *    
+    #*****************************************
+    def nonlinear_mpc(self, state, target):
+
+        '''------ Get parameters --------------'''
+        Q_mpc = nonlinear_mpc_params["Q"]
+        R_mpc = nonlinear_mpc_params["R"]
+        P_mpc = nonlinear_mpc_params["P"]
+        Npred = nonlinear_mpc_params["Npred"]
+
+        '''------- Compute the implicit MPC control input --------'''
+        # Optimization problem using casadi
+        solver_3 = cas.Opti()
+        # Define variables
+        nx_Nmpc = 3
+        x_Nmpc = solver_3.variable(nx_Nmpc, Npred+1)
+        theta = x_Nmpc[2, :]
+
+        u_Nmpc = solver_3.variable(self.nu, Npred)
+        v = u_Nmpc[0, :]
+        omega = u_Nmpc[1, :]
+
+        sys_Nmpc = solver_3.variable(nx_Nmpc, Npred)
+        xinit_Nmpc = solver_3.parameter(nx_Nmpc, 1)
+
+        # Initialize constrains
+        solver_3.subject_to(x_Nmpc[:,0] == xinit_Nmpc)
+        for i in range(0, Npred):
+            # Dynamic system
+            solver_3.subject_to(sys_Nmpc[:, i] == cas.vertcat(v[i]*cas.cos(theta[i]),
+                                                              v[i]*cas.sin(theta[i]),
+                                                              omega[i]))
+            solver_3.subject_to(x_Nmpc[:, i+1] == x_Nmpc[:, i] + self.Ts * sys_Nmpc[:, i])
+            # solver_3.subject_to(x[:, i+1] == cas.mtimes(self.Ad, x[:, i]) + cas.mtimes(self.Bd, u[:, i]))
+            # Constraint of u
+            # solver_3.subject_to(cas.mtimes(self.U_input.A, u[:, i]) <= self.U_input.b)
+            solver_3.subject_to(solver_3.bounded(self.MIN_LIN_VEL, v[i], self.MAX_LIN_VEL))
+            solver_3.subject_to(solver_3.bounded(self.MIN_ROT_VEL, omega[i], self.MAX_ROT_VEL))
+        # Constraint for terminal set
+        # solver_3.subject_to(cas.mtimes(self.Xf_A, (x_Nmpc[:2, Npred] - target)) <= self.Xf_b)
+        
+        # Initialize objective
+        objective = 0
+        for i in range(0,Npred):
+            objective = objective + cas.mtimes(cas.mtimes(cas.transpose(x_Nmpc[:2,i] - target), Q_mpc), x_Nmpc[:2,i] - target) +\
+                                cas.mtimes(cas.mtimes(cas.transpose(u_Nmpc[:,i]), R_mpc), u_Nmpc[:,i])
+        objective = objective + cas.mtimes(cas.mtimes(cas.transpose(x_Nmpc[:2, Npred] - target), P_mpc), x_Nmpc[:2, Npred] - target)
+        ### Them cai constraint cua X_f
+        
+        solver_3.minimize(objective)
+        
+        # Define the solver
+        options = {'ipopt': {'print_level': 0, 'sb': 'yes'},'print_time':0}
+        solver_3.solver('ipopt', options)
+
+        # Solve the problem
+        solver_3.set_value(xinit_Nmpc, state)
+        sol = solver_3.solve()
+        usol = sol.value(u_Nmpc)
         u_impc = usol[:,0].reshape(2,1)
         return u_impc
 
@@ -509,10 +637,10 @@ class TargetControl(Node):
         os.makedirs(base_dir, exist_ok=True)
         
         # Define filenames based on controller type
-        x_pos_filename = f"{controller_type}_target_xPos.mat"
-        y_pos_filename = f"{controller_type}_target_yPos.mat"
-        lin_vel_filename = f"{controller_type}_target_linVel.mat"
-        ang_vel_filename = f"{controller_type}_target_angVel.mat"
+        x_pos_filename = f"{controller_type}_target_xPos_PNpred_new.mat"
+        y_pos_filename = f"{controller_type}_target_yPos_PNpred_new.mat"
+        lin_vel_filename = f"{controller_type}_target_linVel_PNpred_new.mat"
+        ang_vel_filename = f"{controller_type}_target_angVel_PNpred_new.mat"
         
         # Save data
         scipy.io.savemat(os.path.join(base_dir, x_pos_filename), {'x': time_plot, 'y': x_plot})
