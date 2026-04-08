@@ -53,8 +53,8 @@ ros2 run target_tracking target_tracking_controllers --ros-args -p controller_ty
 
 **Available controllers:**
 - `saturated` → Saturated Control
-- `sat_lyapunov` → CLF-based Control (Nominal control \(u_d\): Saturated control) 
-- `lqr_lyapunov` → CLF-based Control (Nominal control \(u_d\): LQR)
+- `sat_lyapunov` → CLF-based Control (Nominal control $u_d$: Saturated control) 
+- `lqr_lyapunov` → CLF-based Control (Nominal control $u_d$: LQR)
 - `explicit_mpc` → Explicit MPC  
 - `implicit_mpc` → Implicit MPC  
 
